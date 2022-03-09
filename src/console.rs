@@ -10,12 +10,14 @@ type BOOL = i32;
 type DWORD = u32;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct COORD {
     x: u16,
     y: u16,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct SMALL_RECT {
     left: i16,
     top: i16,
@@ -24,50 +26,92 @@ struct SMALL_RECT {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct CONSOLE_SCREEN_BUFFER_INFO {
-    dwSize: COORD,
-    dwCursorPosition: COORD,
-    wAttributes: u16,
-    srWindow: SMALL_RECT,
-    dwMaximumWindowSize: COORD,
+    size: COORD,
+    cursor_position: COORD,
+    attributes: u16,
+    window: SMALL_RECT,
+    maximum_window_size: COORD,
 }
 
 impl CONSOLE_SCREEN_BUFFER_INFO {
     pub fn init () -> CONSOLE_SCREEN_BUFFER_INFO {
         CONSOLE_SCREEN_BUFFER_INFO {
-            dwSize: COORD{x: 0, y: 0}, 
-            dwCursorPosition: COORD{x: 0, y: 0}, 
-            wAttributes: 0,
-            srWindow: SMALL_RECT{left: 0, top: 0, right: 0, bottom: 0},
-            dwMaximumWindowSize: COORD{x: 0, y: 0}
+            size: COORD{x: 0, y: 0}, 
+            cursor_position: COORD{x: 0, y: 0}, 
+            attributes: 0,
+            window: SMALL_RECT{left: 0, top: 0, right: 0, bottom: 0},
+            maximum_window_size: COORD{x: 0, y: 0}
         }
     }
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
+union KEY_INPUT_CHAR {
+    unicode_char: u16,
+    ascii_char: u8,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct KEY_EVENT_RECORD {
+    key_down: i32,
+    repeat_count: u16,
+    virtual_key_code: u16,
+    virtual_scan_code: u16,
+    uchar: KEY_INPUT_CHAR,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct MOUSE_EVENT_RECORD {
+    mouse_position: COORD,
+    button_state: u32,
+    control_key_state: u32,
+    event_flags: u32
+}
+
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct WINDOW_BUFFER_SIZE_RECORD {
+    size: COORD
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct MENU_EVENT_RECORD {
+    command_id: u32
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct FOCUS_EVENT_RECORD {
+    set_focus: BOOL
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+union INPUT_RECORD_EVENT {
+    key_event: KEY_EVENT_RECORD,
+    mouse_event: MOUSE_EVENT_RECORD,
+    window_buffer_size_event: WINDOW_BUFFER_SIZE_RECORD,
+    menu_event: MENU_EVENT_RECORD,
+    focus_event: FOCUS_EVENT_RECORD,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
 struct INPUT_RECORD {
-    
+    event_type: u16,
+    event: INPUT_RECORD_EVENT,
 }
 
 // STD Handle Values:
 const STD_INPUT_HANDLE: u32 = 0xffff_fff6;
 const STD_OUTPUT_HANDLE: u32 = 0xffff_fff5;
-const STD_ERROR_HANDLE: u32 = 0xffff_fff4;
-
-// Foreground constants:
-pub const FOREGROUND_BLUE: u16 =  0x0001;
-pub const FOREGROUND_GREEN: u16 = 0x0002;
-pub const FOREGROUND_RED: u16 = 0x0004;
-pub const FOREGROUND_INTENSITY: u16 = 0x0008;
-
-// Background constants:
-pub const BACKGROUND_BLUE: u16 = 0x0010;
-pub const BACKGROUND_GREEN: u16 = 0x0020;
-pub const BACKGROUND_RED: u16 = 0x0040;
-pub const BACKGROUND_INTENSITY: u16 = 0x0080;
-
-// Common LVB constants:
-pub const COMMON_LVB_UNDERSCORE: u16 = 0x8000;
 
 // Virtual Terminal Constants:
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
@@ -83,44 +127,38 @@ extern {
     fn GetConsoleMode (console_handle: HANDLE, lp_mode: *mut u32) -> BOOL;
     fn SetConsoleMode (console_handle: HANDLE, mode: u32) -> BOOL;
 
-    fn GetConsoleScreenBufferInfo (handle: HANDLE, console_screen_buffer_info: *mut CONSOLE_SCREEN_BUFFER_INFO);
-
-    fn SetConsoleTextAttribute (handle: HANDLE, colour: u16) -> i32;
-    fn SetConsoleCursorPosition (handle: HANDLE, position: COORD) -> i32;
+    fn ReadConsoleInputW (input_handle: HANDLE, buffer: *mut INPUT_RECORD, length: i32, number_of_events_read: *mut i32) -> BOOL;
 }
 
 pub struct Console {
     output_handle: HANDLE,
     input_handle: HANDLE,
-
-    start_attributes: u16,
     original_mode: u32,
 }
 
 impl Console {
     pub fn init () -> Console {
         unsafe {
+            // grab everything but hte error handle:
             let output_handle = GetStdHandle(STD_OUTPUT_HANDLE);
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-
-            let mut current_screen_buffer_info = CONSOLE_SCREEN_BUFFER_INFO::init();
-            let screen_buffer_ptr = &mut current_screen_buffer_info as *mut CONSOLE_SCREEN_BUFFER_INFO;
-
-            GetConsoleScreenBufferInfo(output_handle, screen_buffer_ptr);
 
             let mut original_mode: DWORD = 0;
             let mode_ptr = &mut original_mode as *mut DWORD;
             
-            GetConsoleMode(output_handle, mode_ptr);
+            if GetConsoleMode(output_handle, mode_ptr) == 0 {
+                panic!("Failed to retrieve console mode: {}", GetLastError());
+            }
 
             let mode:DWORD = original_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-            SetConsoleMode(output_handle, mode);
+            if SetConsoleMode(output_handle, mode) == 0 {
+                panic!("Failed to set console mode: {}", GetLastError());
+            }
 
             Console {
                 output_handle,
                 input_handle,
-                start_attributes: current_screen_buffer_info.wAttributes,
                 original_mode
             }
         }
@@ -128,30 +166,27 @@ impl Console {
 
     pub fn quit (&self) {
         unsafe {
-            SetConsoleTextAttribute(self.output_handle, self.start_attributes);
             SetConsoleMode(self.output_handle, self.original_mode);
         }
     }
 
     pub fn set_text_position (&self, x: u16, y: u16) {
         unsafe {
-            SetConsoleCursorPosition(self.output_handle, COORD{x, y});
+            // SetConsoleCursorPosition(self.output_handle, COORD{x, y});
         }
     }
 
     pub fn set_text_color (&self, colour: u16) {
         unsafe {
-            SetConsoleTextAttribute(self.output_handle, colour);
+            unimplemented!();
         }
     }
 
     pub fn clear (&self) {
-        unsafe {
-                unimplemented!();
-        }
+        print!("\x1b[2J");
     }
 
-    pub fn in_key (&self) {
-        unimplemented!();
+    pub fn in_key (&self) -> u32 {
+        unimplemented!()
     }
 }
