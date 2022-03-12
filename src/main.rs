@@ -15,8 +15,8 @@ fn main() {
         Ok(elapsed) => {
             let mut rand = rand::Rand::init(elapsed.as_secs() as u32);
 
-            for _ in 0..1_000_000 {
-                print!("{},", rand.next());
+            for _ in 0..1000 {
+                print!("{},", rand.get_i32_bounded(0, 100));
             }
         }
         Err(e) => {
