@@ -11,7 +11,7 @@ type DWORD = u32;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct COORD {
+pub struct COORD {
     x: u16,
     y: u16,
 }
@@ -49,64 +49,66 @@ impl CONSOLE_SCREEN_BUFFER_INFO {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-union KEY_INPUT_CHAR {
-    unicode_char: u16,
-    ascii_char: u8,
+pub union KEY_INPUT_CHAR {
+    pub unicode_char: u16,
+    pub ascii_char: u8,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct KEY_EVENT_RECORD {
-    key_down: i32,
-    repeat_count: u16,
-    virtual_key_code: u16,
-    virtual_scan_code: u16,
-    uchar: KEY_INPUT_CHAR,
+pub struct KEY_EVENT_RECORD {
+    pub key_down: i32,
+    pub repeat_count: u16,
+    pub virtual_key_code: u16,
+    pub virtual_scan_code: u16,
+    pub uchar: KEY_INPUT_CHAR,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct MOUSE_EVENT_RECORD {
-    mouse_position: COORD,
-    button_state: u32,
-    control_key_state: u32,
-    event_flags: u32
+pub struct MOUSE_EVENT_RECORD {
+    pub mouse_position: COORD,
+    pub button_state: u32,
+    pub control_key_state: u32,
+    pub event_flags: u32
 }
 
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct WINDOW_BUFFER_SIZE_RECORD {
-    size: COORD
+pub struct WINDOW_BUFFER_SIZE_RECORD {
+    pub size: COORD
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct MENU_EVENT_RECORD {
-    command_id: u32
+pub struct MENU_EVENT_RECORD {
+    pub command_id: u32
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct FOCUS_EVENT_RECORD {
-    set_focus: BOOL
+pub struct FOCUS_EVENT_RECORD {
+    pub set_focus: BOOL
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-union INPUT_RECORD_EVENT {
-    key_event: KEY_EVENT_RECORD,
-    mouse_event: MOUSE_EVENT_RECORD,
-    window_buffer_size_event: WINDOW_BUFFER_SIZE_RECORD,
-    menu_event: MENU_EVENT_RECORD,
-    focus_event: FOCUS_EVENT_RECORD,
+pub union INPUT_RECORD_EVENT {
+    pub key_event: KEY_EVENT_RECORD,
+    pub mouse_event: MOUSE_EVENT_RECORD,
+    pub window_buffer_size_event: WINDOW_BUFFER_SIZE_RECORD,
+    pub menu_event: MENU_EVENT_RECORD,
+    pub focus_event: FOCUS_EVENT_RECORD,
 }
+
+pub const KEY_EVENT: u16 = 0x0001;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct INPUT_RECORD {
-    event_type: u16,
-    event: INPUT_RECORD_EVENT,
+pub struct INPUT_RECORD {
+    pub event_type: u16,
+    pub event: INPUT_RECORD_EVENT,
 }
 
 // STD Handle Values:
@@ -127,13 +129,23 @@ extern {
     fn GetConsoleMode (console_handle: HANDLE, lp_mode: *mut u32) -> BOOL;
     fn SetConsoleMode (console_handle: HANDLE, mode: u32) -> BOOL;
 
-    fn ReadConsoleInputW (input_handle: HANDLE, buffer: *mut INPUT_RECORD, length: i32, number_of_events_read: *mut i32) -> BOOL;
+    fn ReadConsoleInputW (input_handle: HANDLE, buffer: *mut INPUT_RECORD, length: u32, number_of_events_read: *mut u32) -> BOOL;
 }
 
 pub struct Console {
     output_handle: HANDLE,
     input_handle: HANDLE,
     original_mode: u32,
+}
+
+pub enum Keys {
+
+}
+
+pub struct KeyInfo {
+    key: u32,
+    ch: char,
+    modifiers: u32,
 }
 
 impl Console {
@@ -144,9 +156,8 @@ impl Console {
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
 
             let mut original_mode: DWORD = 0;
-            let mode_ptr = &mut original_mode as *mut DWORD;
             
-            if GetConsoleMode(output_handle, mode_ptr) == 0 {
+            if GetConsoleMode(output_handle, &mut original_mode as *mut DWORD) == 0 {
                 panic!("Failed to retrieve console mode: {}", GetLastError());
             }
 
@@ -186,7 +197,25 @@ impl Console {
         print!("\x1b[2J");
     }
 
-    pub fn in_key (&self) -> u32 {
-        unimplemented!()
+    pub fn read_key (&self) -> KeyInfo {
+        unsafe {
+            /*/
+            let mut inputs: INPUT_RECORD;
+            let mut event_count: u32 = 0;
+
+            ReadConsoleInputW(self.input_handle, &mut inputs as *mut INPUT_RECORD, 1, &mut event_count as *mut u32);
+
+            if event_count > 0 {
+                if inputs.event_type == KEY_EVENT {
+
+                    inputs.event.key_event.key_down == 1
+                }
+            }
+            */
+        }
+
+        KeyInfo {
+            key: 0, ch: '\0', modifiers: 0
+        }
     }
 }
