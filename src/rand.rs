@@ -17,7 +17,7 @@ impl Rand {
         r.mt[0] = seed & 0xffff_ffff;
 
         for i in 1..(N - 1)  {
-            r.mt[i] = (F.wrapping_mul((r.mt[i - 1] ^ ((r.mt[i - 1] >> 30))) + i as u32)) & 0xffff_ffff; // this panics
+            r.mt[i] = (F.wrapping_mul((r.mt[i - 1] ^ ((r.mt[i - 1] >> 30))) + i as u32)) & 0xffff_ffff;
         }
 
         return r
