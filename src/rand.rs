@@ -8,7 +8,7 @@ pub struct Rand {
 }
 
 impl Rand {
-    pub fn init (seed: u32) -> Rand {
+    pub fn new (seed: u32) -> Rand {
         let mut r: Rand = Rand {
             mt: [0; N],
             index: N,
@@ -29,14 +29,6 @@ impl Rand {
 
     pub fn get_i32_bounded (&mut self, min: i32, max: i32) -> i32 {
         return (self.next() as i32 % max) + min;
-    }
-
-    pub fn get_f32 (&mut self) -> f32 {
-        return self.next() as f32;
-    }
-
-    pub fn get_f32_bounded (&mut self, min: f32, max: f32) -> f32 {
-        return (self.next() % (max.round() as u32)) as f32 + min;
     }
 
     fn next (&mut self) -> u32 {

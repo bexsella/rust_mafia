@@ -1,8 +1,4 @@
-///
-/// 
-
 use std::ffi::{c_void};
-use std::ptr::{null_mut};
 
 // Win32 Types
 type HANDLE = *mut c_void;
@@ -36,7 +32,7 @@ struct CONSOLE_SCREEN_BUFFER_INFO {
 }
 
 impl CONSOLE_SCREEN_BUFFER_INFO {
-    pub fn init () -> CONSOLE_SCREEN_BUFFER_INFO {
+    pub fn new () -> CONSOLE_SCREEN_BUFFER_INFO {
         CONSOLE_SCREEN_BUFFER_INFO {
             size: COORD{x: 0, y: 0}, 
             cursor_position: COORD{x: 0, y: 0}, 
@@ -73,7 +69,6 @@ pub struct MOUSE_EVENT_RECORD {
     pub event_flags: u32
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct WINDOW_BUFFER_SIZE_RECORD {
@@ -102,7 +97,10 @@ pub union INPUT_RECORD_EVENT {
     pub focus_event: FOCUS_EVENT_RECORD,
 }
 
+pub const FOCUS_EVENT: u16 = 0x0010;
 pub const KEY_EVENT: u16 = 0x0001;
+pub const MENU_EVENT: u16 = 0x0008;
+pub const WINDOW_BUFFER_SIZE_EVENT: u16 = 0x0004;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -115,8 +113,33 @@ pub struct INPUT_RECORD {
 const STD_INPUT_HANDLE: u32 = 0xffff_fff6;
 const STD_OUTPUT_HANDLE: u32 = 0xffff_fff5;
 
-// Virtual Terminal Constants:
-const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
+pub enum Colours {
+    Black,
+    DarkBLue,
+    DarkGreen,
+    DarkRed,
+    DarkCyan,
+    DarkPurple,
+    DarkGrey,
+    DarkWhite,
+    Grey,
+    Blue,
+    Green,
+    Cyan,
+    Red,
+    Purple,
+    Yellow,
+    White,
+}
+
+const FOREGROUND_BLUE: u16 = 0x0001;
+const FOREGORUND_GREEN: u16 = 0x0002;
+const FOREGROUND_RED: u16 = 0x0004;
+const FOREGROUND_INTENSITY: u16 = 0x0008;
+const BACKGROUND_BLUE: u16 = 0x0010;
+const BACKGROUND_GREEN: u16 = 0x0020;
+const BACKGROUND_RED: u16 = 0x0040;
+const BACKGROUND_INTENSITY: u16 = 0x0080;
 
 #[link(name = "Kernel32")]
 extern {
@@ -126,46 +149,37 @@ extern {
     // Win32 Console API
     fn GetStdHandle (std_handle: u32) -> HANDLE;
 
-    fn GetConsoleMode (console_handle: HANDLE, lp_mode: *mut u32) -> BOOL;
-    fn SetConsoleMode (console_handle: HANDLE, mode: u32) -> BOOL;
+    fn GetConsoleScreenBufferInfo(console_handle: HANDLE, screne_buffer_info: *mut CONSOLE_SCREEN_BUFFER_INFO) -> BOOL;
 
+    fn SetConsoleTextAttribute(console_handle: HANDLE, attributtes: u16) -> BOOL;
+    fn FillConsoleOutputCharacter(console_handle: HANDLE, character: u8, length: DWORD, write_coord: COORD, chars_written_count: *mut DWORD) -> BOOL;
+    fn FillConsoleOutputAttribute(console_handle: HANDLE, attributes: u16, coordinates: COORD, chars_written: *mut DWORD) -> BOOL;
+    fn SetConsoleCursorPosition(console_handle: HANDLE, position: COORD) -> BOOL;
+
+    fn FlushConsoleInputBuffer(console_handle: HANDLE) -> BOOL;
     fn ReadConsoleInputW (input_handle: HANDLE, buffer: *mut INPUT_RECORD, length: u32, number_of_events_read: *mut u32) -> BOOL;
 }
 
 pub struct Console {
     output_handle: HANDLE,
     input_handle: HANDLE,
-    original_mode: u32,
-}
-
-pub enum Keys {
-
-}
-
-pub struct KeyInfo {
-    key: u32,
-    ch: char,
-    modifiers: u32,
+    original_mode: CONSOLE_SCREEN_BUFFER_INFO,
 }
 
 impl Console {
-    pub fn init () -> Console {
+    pub fn new () -> Console {
         unsafe {
             // grab everything but hte error handle:
             let output_handle = GetStdHandle(STD_OUTPUT_HANDLE);
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
 
-            let mut original_mode: DWORD = 0;
+            let mut original_mode = CONSOLE_SCREEN_BUFFER_INFO::new();
             
-            if GetConsoleMode(output_handle, &mut original_mode as *mut DWORD) == 0 {
+            if GetConsoleScreenBufferInfo(output_handle, &mut original_mode as *mut CONSOLE_SCREEN_BUFFER_INFO) == 0 {
                 panic!("Failed to retrieve console mode: {}", GetLastError());
             }
 
-            let mode:DWORD = original_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-
-            if SetConsoleMode(output_handle, mode) == 0 {
-                panic!("Failed to set console mode: {}", GetLastError());
-            }
+            FlushConsoleInputBuffer(input_handle); // we want to ignore the enter up that occurs when we launch.
 
             Console {
                 output_handle,
@@ -177,45 +191,62 @@ impl Console {
 
     pub fn quit (&self) {
         unsafe {
-            SetConsoleMode(self.output_handle, self.original_mode);
+            SetConsoleTextAttribute(self.output_handle, self.original_mode.attributes);
         }
     }
 
     pub fn set_text_position (&self, x: u16, y: u16) {
         unsafe {
-            // SetConsoleCursorPosition(self.output_handle, COORD{x, y});
+            SetConsoleCursorPosition(self.output_handle, COORD{x, y});
         }
     }
 
-    pub fn set_text_color (&self, colour: u16) {
+    pub fn set_text_color (&self, fore: Colours, back: Colours) {
+        let mut text_attributes: u16 = 0;
+
         unsafe {
-            unimplemented!();
+            SetConsoleTextAttribute(self.output_handle, text_attributes);
         }
     }
 
     pub fn clear (&self) {
-        print!("\x1b[2J");
+        unsafe {
+            let mut csbi = CONSOLE_SCREEN_BUFFER_INFO::new();
+            GetConsoleScreenBufferInfo(self.output_handle, &mut csbi as *mut CONSOLE_SCREEN_BUFFER_INFO);
+
+            let mut chars_written: u32 = 0;
+            FillConsoleOutputCharacter(self.output_handle, 0x20, (csbi.size.x * csbi.size.y) as u32, COORD{x: 0, y: 0}, &mut chars_written as *mut u32);
+            FillConsoleOutputAttribute(self.output_handle, csbi.attributes, COORD{x: 0, y: 0}, &mut chars_written as *mut u32);
+        }
     }
 
-    pub fn read_key (&self) -> KeyInfo {
-        unsafe {
-            /*/
-            let mut inputs: INPUT_RECORD;
-            let mut event_count: u32 = 0;
-
-            ReadConsoleInputW(self.input_handle, &mut inputs as *mut INPUT_RECORD, 1, &mut event_count as *mut u32);
-
-            if event_count > 0 {
-                if inputs.event_type == KEY_EVENT {
-
-                    inputs.event.key_event.key_down == 1
+    pub fn read_key (&self) -> (bool, u16) {
+        // Fill with nonsense, so at very least rustc can determine it's not empty.
+        let mut input = INPUT_RECORD {
+            event_type: 0,
+            event: INPUT_RECORD_EVENT {
+                focus_event: FOCUS_EVENT_RECORD {
+                    set_focus: 0
                 }
             }
-            */
+        };
+
+        unsafe {
+            let mut event_count: u32 = 0;
+
+            // TODO(sbell): Do we want to handle other events?
+            if ReadConsoleInputW(self.input_handle, &mut input as *mut INPUT_RECORD, 1, &mut event_count as *mut u32) == 1 {
+                if event_count > 0 {
+                    if input.event_type == KEY_EVENT {
+                        let key = input.event.key_event;
+                        return (key.key_down == 1, key.virtual_key_code);
+                    }
+                }
+            } else {
+                return (false, 0);
+            }
         }
 
-        KeyInfo {
-            key: 0, ch: '\0', modifiers: 0
-        }
+        return (false, 0)
     }
 }

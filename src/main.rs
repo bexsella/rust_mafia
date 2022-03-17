@@ -1,27 +1,31 @@
 mod console;
 mod rand;
+use std::time;
+
 
 fn main() {
-    let con = console::Console::init();
+    let con = console::Console::new();
+
+    let now = time::SystemTime::now();
+    let seed = now.elapsed().unwrap_or(time::Duration::from_secs(65536));
 
     // con.set_text_color(console::BACKGROUND_BLUE|console::FOREGROUND_GREEN|console::FOREGROUND_RED|console::FOREGROUND_INTENSITY);
-    // con.set_text_position(40, 5);
+    con.set_text_position(40, 5);
 
-    con.clear();
+    let mut quit = false;
 
-    println!("Hello, world!");
+    while !quit {
+        con.clear();
 
-    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(elapsed) => {
-            let mut rand = rand::Rand::init(elapsed.as_secs() as u32);
+        let key = con.read_key();
 
-            for _ in 0..1000 {
-                print!("{},", rand.get_i32_bounded(0, 100));
+        if key.0 == true {
+            if key.1 == 27 {
+                quit = true;
             }
         }
-        Err(e) => {
-            panic!("Time is an aenigma");
-        }
+
+        print!("Time has passed.\n")
     }
 
     con.quit();
