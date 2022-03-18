@@ -28,7 +28,7 @@ impl Rand {
     }
 
     pub fn get_i32_bounded (&mut self, min: i32, max: i32) -> i32 {
-        return (self.next() as i32 % max) + min;
+        return (self.next() as i32 % (max - min).abs()) + min;
     }
 
     fn next (&mut self) -> u32 {

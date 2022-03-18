@@ -152,7 +152,7 @@ extern {
     fn GetConsoleScreenBufferInfo(console_handle: HANDLE, screne_buffer_info: *mut CONSOLE_SCREEN_BUFFER_INFO) -> BOOL;
 
     fn SetConsoleTextAttribute(console_handle: HANDLE, attributtes: u16) -> BOOL;
-    fn FillConsoleOutputCharacter(console_handle: HANDLE, character: u8, length: DWORD, write_coord: COORD, chars_written_count: *mut DWORD) -> BOOL;
+    fn FillConsoleOutputCharacterW(console_handle: HANDLE, character: u16, length: DWORD, write_coord: COORD, chars_written_count: *mut DWORD) -> BOOL;
     fn FillConsoleOutputAttribute(console_handle: HANDLE, attributes: u16, coordinates: COORD, chars_written: *mut DWORD) -> BOOL;
     fn SetConsoleCursorPosition(console_handle: HANDLE, position: COORD) -> BOOL;
 
@@ -215,7 +215,8 @@ impl Console {
             GetConsoleScreenBufferInfo(self.output_handle, &mut csbi as *mut CONSOLE_SCREEN_BUFFER_INFO);
 
             let mut chars_written: u32 = 0;
-            FillConsoleOutputCharacter(self.output_handle, 0x20, (csbi.size.x * csbi.size.y) as u32, COORD{x: 0, y: 0}, &mut chars_written as *mut u32);
+            FillConsoleOutputCharacterW(self.output_handle, 0x20, csbi.size.x as u32 * csbi.size.y as u32, COORD{x: 0, y: 0}, &mut chars_written as *mut u32);
+            GetConsoleScreenBufferInfo(self.output_handle, &mut csbi as *mut CONSOLE_SCREEN_BUFFER_INFO);
             FillConsoleOutputAttribute(self.output_handle, csbi.attributes, COORD{x: 0, y: 0}, &mut chars_written as *mut u32);
         }
     }
